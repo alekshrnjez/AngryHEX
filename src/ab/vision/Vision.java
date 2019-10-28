@@ -11,6 +11,7 @@ package ab.vision;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Vision {
@@ -42,6 +43,21 @@ public class Vision {
 			visionMBR = new VisionMBR(image);
 		}
 		return visionMBR.findBlocks();
+	}
+	
+	public List<ABObject> findHorizontalBars()
+	{
+		List<ABObject> blocks = findBlocksMBR();
+		ArrayList<ABObject> bars = new ArrayList();
+		
+		for (ABObject b : blocks)
+		{
+			double ratio = b.getWidth() / b.getHeight();
+			if (ratio > 4)
+				bars.add(b);
+		}
+		
+		return bars;
 	}
 	
 	public List<ABObject> findTNTs()
@@ -77,6 +93,26 @@ public class Vision {
 		}
 		
 		return visionRealShape.findBirds();
+	}
+	
+	public List<ABObject> findStones()
+	{
+		if (visionRealShape == null)
+		{
+			visionRealShape = new VisionRealShape(image);
+		}
+		
+		List<ABObject> blocks = visionRealShape.findObjects();
+		ArrayList<ABObject> stones = new ArrayList();
+		
+		for (ABObject obj : blocks)
+		{
+			if ((obj.type == ABType.Stone || obj.type == ABType.Wood || 
+				obj.type == ABType.Ice || obj.type == ABType.Unknown) && obj.shape == ABShape.Circle)
+				stones.add(obj);
+		}
+		
+		return stones;
 	}
 	
 	public List<ABObject> findHills()
@@ -119,7 +155,6 @@ public class Vision {
 		
 		return allBlocks;
 	}
-
 	public VisionMBR getMBRVision()
 	{
 		if(visionMBR == null)

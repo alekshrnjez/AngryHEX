@@ -138,6 +138,9 @@ public class NaiveAgent implements Runnable {
 		}
         // get all the pigs
  		List<ABObject> pigs = vision.findPigsMBR();
+		List<ABObject> stones = vision.findStones();
+		List<ABObject> bars = vision.findHorizontalBars();
+		boolean targetIsBar = false;
 
 		GameState state = aRobot.getState();
 
@@ -150,10 +153,70 @@ public class NaiveAgent implements Runnable {
 				Shot shot = new Shot();
 				int dx,dy;
 				{
-					// random pick up a pig
-					ABObject pig = pigs.get(randomGenerator.nextInt(pigs.size()));
+					ABObject target = null;
 					
-					Point _tpt = pig.getCenter();// if the target is very close to before, randomly choose a
+					if (firstShot && stones.size() > 0 && randomGenerator.nextInt(2) == 0)
+					{
+						//get closest stone
+						float minX = 9999999f;
+						for (ABObject obj : stones)
+						{
+							if (obj.x < minX)
+							{
+								minX = obj.x;
+								target = obj;
+							}
+						}
+						
+						if (target == null)
+							target = stones.get(0);
+					}
+					else if (bars.size() > 0) // pick a horizontal bar
+					{
+						// pick the closest pig
+						ABObject closestPig = null;
+						float minX = 9999999;
+						float maxY = 0;
+						for (ABObject p : pigs)
+						{
+							if (p.x < minX - 150 ||
+								p.x < minX + 150 && p.y > maxY)
+							{
+								minX = p.x;
+								maxY = p.y;
+								closestPig = p;
+							}
+						}
+						
+						if (closestPig != null)
+						{
+							// pick a bar above the pig
+							float minY = 9999999;
+							for (ABObject b : bars)
+							{
+								// if bar above pig
+								if (b.x < closestPig.x && b.x + b.getWidth() > closestPig.x + closestPig.getWidth() && b.y > closestPig.y)
+								{
+									if (b.y < minY)
+									{
+										minY = b.y;
+										target = b;
+										targetIsBar = true;
+									}
+								}
+							}
+						}	
+					}
+					
+					if (target == null)
+						//random pick a pig if nothing selected
+						target = pigs.get(randomGenerator.nextInt(pigs.size()));
+					
+					Point _tpt;
+					if (targetIsBar)
+						_tpt = new Point(target.x, target.y + (int)(target.getHeight() / 2));
+					else
+						_tpt = target.getCenter();// if the target is very close to before, randomly choose a
 					// point near it
 					if (prevTarget != null && distance(prevTarget, _tpt) < 10) {
 						double _angle = randomGenerator.nextDouble() * Math.PI * 2;
@@ -178,9 +241,9 @@ public class NaiveAgent implements Runnable {
 					{
 						// randomly choose between the trajectories, with a 1 in
 						// 6 chance of choosing the high one
-						if (randomGenerator.nextInt(6) == 0)
-							releasePoint = pts.get(1);
-						else
+						//if (randomGenerator.nextInt(6) == 0)
+						//	releasePoint = pts.get(1);
+						//else
 							releasePoint = pts.get(0);
 					}
 					else
