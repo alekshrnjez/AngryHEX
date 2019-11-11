@@ -151,7 +151,8 @@ public class TrajectoryPlanner {
         double x = (targetPoint.x - ref.x) / scale;
         double y = -(targetPoint.y - ref.y) / scale;
         
-        double bestError = 1000;
+		double err = 1000;
+        double bestError = err;
         double theta1 = 0;
         double theta2 = 0;
         
@@ -187,13 +188,13 @@ public class TrajectoryPlanner {
                 bestError = error;
             }
         }
-        if (bestError < 1000)
+        if (bestError < err)
         {
             theta1 = actualToLaunch(theta1);
             // add launch points to the list
             pts.add(findReleasePoint(slingshot, theta1));
         }
-        bestError = 1000;
+        bestError = err;
         
         // search angles in range [t2 - BOUND, t2 + BOUND]
         for (double theta = t2 - BOUND; theta <= t2 + BOUND; theta += 0.001)
@@ -223,7 +224,94 @@ public class TrajectoryPlanner {
             
         
         // add the higher point if it is below 75 degrees and not same as first
-        if (theta2 < Math.toRadians(75) && theta2 != theta1 && bestError < 1000)
+        if (theta2 < Math.toRadians(75) && theta2 != theta1 && bestError < err)
+            pts.add(findReleasePoint(slingshot, theta2));
+        
+        return pts;
+    }
+	public ArrayList<Point> estimateLaunchPoint(Rectangle slingshot, Point targetPoint, double err) {
+        
+        // calculate relative position of the target (normalised)
+        double scale = getSceneScale(slingshot);
+        //System.out.println("scale " + scale);
+        Point ref = getReferencePoint(slingshot);
+            
+        double x = (targetPoint.x - ref.x) / scale;
+        double y = -(targetPoint.y - ref.y) / scale;
+        
+        double bestError = err;
+        double theta1 = 0;
+        double theta2 = 0;
+        
+        // first estimate launch angle using the projectile equation (constant velocity)
+        double v = _scaleFactor * _launchVelocity[6];
+        double v2 = v * v;
+        double v4 = v2 * v2;
+        double tangent1 = (v2 - Math.sqrt(v4 - (x * x + 2 * y * v2))) / x;
+        double tangent2 = (v2 + Math.sqrt(v4 - (x * x + 2 * y * v2))) / x;
+        double t1 = actualToLaunch(Math.atan(tangent1));
+        double t2 = actualToLaunch(Math.atan(tangent2));
+
+        ArrayList<Point> pts = new ArrayList<Point>();
+
+        // search angles in range [t1 - BOUND, t1 + BOUND]
+        for (double theta = t1 - BOUND; theta <= t1 + BOUND; theta += 0.001)
+        {
+            double velocity = getVelocity(theta);
+            
+            // initial velocities
+            double u_x = velocity * Math.cos(theta);
+            double u_y = velocity * Math.sin(theta);
+            
+            // the normalised coefficients
+            double a = -0.5 / (u_x * u_x);
+            double b = u_y / u_x;
+            
+            // the error in y-coordinate
+            double error = Math.abs(a*x*x + b*x - y);
+            if (error < bestError)
+            {
+                theta1 = theta;
+                bestError = error;
+            }
+        }
+        if (bestError < err)
+        {
+            theta1 = actualToLaunch(theta1);
+            // add launch points to the list
+            pts.add(findReleasePoint(slingshot, theta1));
+        }
+        bestError = err;
+        
+        // search angles in range [t2 - BOUND, t2 + BOUND]
+        for (double theta = t2 - BOUND; theta <= t2 + BOUND; theta += 0.001)
+        {
+            double velocity = getVelocity(theta);
+            
+            // initial velocities
+            double u_x = velocity * Math.cos(theta);
+            double u_y = velocity * Math.sin(theta);
+            
+            // the normalised coefficients
+            double a = -0.5 / (u_x * u_x);
+            double b = u_y / u_x;
+            
+            // the error in y-coordinate
+            double error = Math.abs(a*x*x + b*x - y);
+            if (error < bestError)
+            {
+                theta2 = theta;
+                bestError = error;
+            }
+        }
+        
+        theta2 = actualToLaunch(theta2);
+        
+        //System.out.println("Two angles: " + Math.toDegrees(theta1) + ", " + Math.toDegrees(theta2));
+            
+        
+        // add the higher point if it is below 75 degrees and not same as first
+        if (theta2 < Math.toRadians(75) && theta2 != theta1 && bestError < err)
             pts.add(findReleasePoint(slingshot, theta2));
         
         return pts;

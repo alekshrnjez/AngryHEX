@@ -53,7 +53,7 @@ public class Vision {
 		for (ABObject b : blocks)
 		{
 			double ratio = b.getWidth() / b.getHeight();
-			if (ratio > 4)
+			if (ratio > 3.55)
 				bars.add(b);
 		}
 		

@@ -33,7 +33,9 @@ public class NaiveAgent implements Runnable {
 	public static int time_limit = 12;
 	private Map<Integer,Integer> scores = new LinkedHashMap<Integer,Integer>();
 	TrajectoryPlanner tp;
-	private boolean firstShot;
+	private int previousPigCount;
+	private int shotNumber;
+	private int previousShotNumber;
 	private Point prevTarget;
 	// a standalone implementation of the Naive Agent
 	public NaiveAgent() {
@@ -41,7 +43,7 @@ public class NaiveAgent implements Runnable {
 		aRobot = new ActionRobot();
 		tp = new TrajectoryPlanner();
 		prevTarget = null;
-		firstShot = true;
+		shotNumber = 0;
 		randomGenerator = new Random();
 		// --- go to the Poached Eggs episode level selection page ---
 		ActionRobot.GoFromMainMenuToLevelSelection();
@@ -56,6 +58,7 @@ public class NaiveAgent implements Runnable {
 		while (true) {
 			GameState state = solve();
 			if (state == GameState.WON) {
+				shotNumber = 0;
 				try {
 					Thread.sleep(3000);
 				} catch (InterruptedException e) {
@@ -82,22 +85,26 @@ public class NaiveAgent implements Runnable {
 				tp = new TrajectoryPlanner();
 
 				// first shot on this level, try high shot first
-				firstShot = true;
+				shotNumber = 0;
 			} else if (state == GameState.LOST) {
+				shotNumber = 0;
 				System.out.println("Restart");
 				aRobot.restartLevel();
 			} else if (state == GameState.LEVEL_SELECTION) {
+				shotNumber = 0;
 				System.out
 				.println("Unexpected level selection page, go to the last current level : "
 						+ currentLevel);
 				aRobot.loadLevel(currentLevel);
 			} else if (state == GameState.MAIN_MENU) {
+				shotNumber = 0;
 				System.out
 				.println("Unexpected main menu page, go to the last current level : "
 						+ currentLevel);
 				ActionRobot.GoFromMainMenuToLevelSelection();
 				aRobot.loadLevel(currentLevel);
 			} else if (state == GameState.EPISODE_MENU) {
+				shotNumber = 0;
 				System.out
 				.println("Unexpected episode menu page, go to the last current level : "
 						+ currentLevel);
@@ -141,8 +148,21 @@ public class NaiveAgent implements Runnable {
 		List<ABObject> stones = vision.findStones();
 		List<ABObject> bars = vision.findHorizontalBars();
 		boolean targetIsBar = false;
+		boolean targetIsStone = false;
 
 		GameState state = aRobot.getState();
+		
+		if (shotNumber != previousShotNumber)
+		{
+			if (pigs.size() > 0 && pigs.size() == previousPigCount)
+			{
+				System.out.println("No Pigs eliminated -> Restart");
+				aRobot.restartLevel();
+			}
+			
+			previousPigCount = pigs.size();
+		}
+		
 
 		// if there is a sling, then play, otherwise just skip.
 		if (sling != null) {
@@ -155,7 +175,7 @@ public class NaiveAgent implements Runnable {
 				{
 					ABObject target = null;
 					
-					if (firstShot && stones.size() > 0 && randomGenerator.nextInt(2) == 0)
+					if (shotNumber == 0 && stones.size() == 1)
 					{
 						//get closest stone
 						float minX = 9999999f;
@@ -170,6 +190,7 @@ public class NaiveAgent implements Runnable {
 						
 						if (target == null)
 							target = stones.get(0);
+						targetIsStone = true;
 					}
 					else if (bars.size() > 0) // pick a horizontal bar
 					{
@@ -179,8 +200,8 @@ public class NaiveAgent implements Runnable {
 						float maxY = 0;
 						for (ABObject p : pigs)
 						{
-							if (p.x < minX - 150 ||
-								p.x < minX + 150 && p.y > maxY)
+							if (p.x < minX - p.getWidth() * 2 ||
+							   (p.x < minX + p.getWidth() * 2 && p.y > maxY))
 							{
 								minX = p.x;
 								maxY = p.y;
@@ -190,27 +211,70 @@ public class NaiveAgent implements Runnable {
 						
 						if (closestPig != null)
 						{
-							// pick a bar above the pig
-							float minY = 9999999;
+							maxY = 0;
 							for (ABObject b : bars)
 							{
-								// if bar above pig
-								if (b.x < closestPig.x && b.x + b.getWidth() > closestPig.x + closestPig.getWidth() && b.y > closestPig.y)
+								// if bar below pig
+								if (b.x < closestPig.x + closestPig.getWidth() && b.x + b.getWidth() > closestPig.x && b.y < closestPig.y)
 								{
-									if (b.y < minY)
+									if (b.y > maxY)
 									{
-										minY = b.y;
+										maxY = b.y;
 										target = b;
 										targetIsBar = true;
 									}
 								}
 							}
+							
+							//if no bar is found search for bar below pig
+							if (!targetIsBar)
+							{
+								// pick a bar above the pig
+								float minY = 9999999;
+								for (ABObject b : bars)
+								{
+									// if bar above pig
+									if (b.x < closestPig.x + closestPig.getWidth() && b.x + b.getWidth() > closestPig.x && b.y > closestPig.y)
+									{
+										if (b.y < minY)
+										{
+											minY = b.y;
+											target = b;
+											targetIsBar = true;
+										}
+									}
+								}
+							}
 						}	
+					}
+					else if (shotNumber == 0 && stones.size() > 1)
+					{
+						//get closest stone
+						float minX = 9999999f;
+						for (ABObject obj : stones)
+						{
+							if (obj.x < minX)
+							{
+								minX = obj.x;
+								target = obj;
+							}
+						}
+						
+						if (target == null)
+							target = stones.get(0);
+						targetIsStone = true;
 					}
 					
 					if (target == null)
 						//random pick a pig if nothing selected
 						target = pigs.get(randomGenerator.nextInt(pigs.size()));
+						
+					if (targetIsStone)
+						System.out.println("Target is Stone");
+					else if (targetIsBar)
+						System.out.println("Target is Bar");
+					else
+						System.out.println("Target is Pig");
 					
 					Point _tpt;
 					if (targetIsBar)
@@ -228,10 +292,12 @@ public class NaiveAgent implements Runnable {
 					prevTarget = new Point(_tpt.x, _tpt.y);
 
 					// estimate the trajectory
-					ArrayList<Point> pts = tp.estimateLaunchPoint(sling, _tpt);
-					
+					double err = randomGenerator.nextDouble() * 20 + 50;
+					System.out.println("Trajectory-Planer Error: " + err);
+					ArrayList<Point> pts = tp.estimateLaunchPoint(sling, _tpt, err);
+
 					// do a high shot when entering a level to find an accurate velocity
-					if (firstShot && pts.size() > 1) 
+					/*if (shotNumber == 0 && pts.size() > 1) 
 					{
 						releasePoint = pts.get(1);
 					}
@@ -253,6 +319,21 @@ public class NaiveAgent implements Runnable {
 							System.out.println("Try a shot with 45 degree");
 							releasePoint = tp.findReleasePoint(sling, Math.PI/4);
 						}
+						*/
+						
+					if (pts.size() > 0)
+					{
+						if (targetIsStone)
+							releasePoint = pts.get(1);
+						else
+							releasePoint = pts.get(0);
+					}
+					else
+					{
+						System.out.println("No release point found for the target");
+						System.out.println("Try a shot with 45 degree");
+						releasePoint = tp.findReleasePoint(sling, Math.PI/4);
+					}
 					
 					// Get the reference point
 					Point refPoint = tp.getReferencePoint(sling);
@@ -278,7 +359,7 @@ public class NaiveAgent implements Runnable {
 						case BlackBird:
 							tapInterval =  70 + randomGenerator.nextInt(20);break; // 70-90% of the way
 						case BlueBird:
-							tapInterval =  65 + randomGenerator.nextInt(20);break; // 65-85% of the way
+							tapInterval =  80 + randomGenerator.nextInt(10);break; // 80-90% of the way
 						default:
 							tapInterval =  60;
 						}
@@ -316,7 +397,8 @@ public class NaiveAgent implements Runnable {
 									vision = new Vision(screenshot);
 									List<Point> traj = vision.findTrajPoints();
 									tp.adjustTrajectory(traj, sling, releasePoint);
-									firstShot = false;
+									previousShotNumber = shotNumber;
+									shotNumber++;
 								}
 							}
 						}
