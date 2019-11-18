@@ -33,7 +33,8 @@ public class NaiveAgent implements Runnable {
 	public static int time_limit = 12;
 	private Map<Integer,Integer> scores = new LinkedHashMap<Integer,Integer>();
 	TrajectoryPlanner tp;
-	private int previousPigCount;
+	private int score;
+	private int previousScore;
 	private int shotNumber;
 	private int previousShotNumber;
 	private Point prevTarget;
@@ -64,7 +65,7 @@ public class NaiveAgent implements Runnable {
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-				int score = StateUtil.getScore(ActionRobot.proxy);
+				score = StateUtil.getScore(ActionRobot.proxy);
 				if(!scores.containsKey(currentLevel))
 					scores.put(currentLevel, score);
 				else
@@ -86,18 +87,22 @@ public class NaiveAgent implements Runnable {
 
 				// first shot on this level, try high shot first
 				shotNumber = 0;
+				score = 0;
 			} else if (state == GameState.LOST) {
 				shotNumber = 0;
+				score = 0;
 				System.out.println("Restart");
 				aRobot.restartLevel();
 			} else if (state == GameState.LEVEL_SELECTION) {
 				shotNumber = 0;
+				score = 0;
 				System.out
 				.println("Unexpected level selection page, go to the last current level : "
 						+ currentLevel);
 				aRobot.loadLevel(currentLevel);
 			} else if (state == GameState.MAIN_MENU) {
 				shotNumber = 0;
+				score = 0;
 				System.out
 				.println("Unexpected main menu page, go to the last current level : "
 						+ currentLevel);
@@ -105,6 +110,7 @@ public class NaiveAgent implements Runnable {
 				aRobot.loadLevel(currentLevel);
 			} else if (state == GameState.EPISODE_MENU) {
 				shotNumber = 0;
+				score = 0;
 				System.out
 				.println("Unexpected episode menu page, go to the last current level : "
 						+ currentLevel);
@@ -147,20 +153,24 @@ public class NaiveAgent implements Runnable {
  		List<ABObject> pigs = vision.findPigsMBR();
 		List<ABObject> stones = vision.findStones();
 		List<ABObject> bars = vision.findHorizontalBars();
+		List<ABObject> walls = vision.findWalls();
 		boolean targetIsBar = false;
+		boolean targetIsWall = false;
 		boolean targetIsStone = false;
 
 		GameState state = aRobot.getState();
 		
 		if (shotNumber != previousShotNumber)
 		{
-			if (pigs.size() > 0 && pigs.size() == previousPigCount)
+			score = StateUtil.getScore(ActionRobot.proxy);
+			if (score > 0 && score - previousScore < 3500)
 			{
-				System.out.println("No Pigs eliminated -> Restart");
+				System.out.println("Bad shot(" + previousScore + " -> " + score + ") -> Restart");
+				previousScore = 0;
 				aRobot.restartLevel();
 			}
-			
-			previousPigCount = pigs.size();
+			else
+				previousScore = score;
 		}
 		
 
@@ -175,104 +185,53 @@ public class NaiveAgent implements Runnable {
 				{
 					ABObject target = null;
 					
-					if (shotNumber == 0 && stones.size() == 1)
+					// target selection based on bird type
+					switch (aRobot.getBirdTypeOnSling()) 
 					{
-						//get closest stone
-						float minX = 9999999f;
-						for (ABObject obj : stones)
-						{
-							if (obj.x < minX)
+						case YellowBird:
+							if (walls.size() > 0) // pick a wall
 							{
-								minX = obj.x;
-								target = obj;
+								target = SelectWall(pigs, walls);
+								if (target != null)
+									targetIsWall = true;
 							}
-						}
-						
-						if (target == null)
-							target = stones.get(0);
-						targetIsStone = true;
-					}
-					else if (bars.size() > 0) // pick a horizontal bar
-					{
-						// pick the closest pig
-						ABObject closestPig = null;
-						float minX = 9999999;
-						float maxY = 0;
-						for (ABObject p : pigs)
-						{
-							if (p.x < minX - p.getWidth() * 2 ||
-							   (p.x < minX + p.getWidth() * 2 && p.y > maxY))
+							break;
+						case WhiteBird:
+						case BlackBird:
+						case RedBird:
+						case BlueBird:
+						default:
+							if (shotNumber == 0 && stones.size() == 1)
 							{
-								minX = p.x;
-								maxY = p.y;
-								closestPig = p;
+								target = SelectStone(stones);
+								if (target != null)
+									targetIsStone = true;
 							}
-						}
-						
-						if (closestPig != null)
-						{
-							maxY = 0;
-							for (ABObject b : bars)
+							else if (bars.size() > 0) // pick a horizontal bar
 							{
-								// if bar below pig
-								if (b.x < closestPig.x + closestPig.getWidth() && b.x + b.getWidth() > closestPig.x && b.y < closestPig.y)
-								{
-									if (b.y > maxY)
-									{
-										maxY = b.y;
-										target = b;
-										targetIsBar = true;
-									}
-								}
+								target = SelectBar(pigs, bars);
+								if (target != null)
+									targetIsBar = true;
 							}
-							
-							//if no bar is found search for bar below pig
-							if (!targetIsBar)
+							else if (shotNumber == 0 && stones.size() > 1)
 							{
-								// pick a bar above the pig
-								float minY = 9999999;
-								for (ABObject b : bars)
-								{
-									// if bar above pig
-									if (b.x < closestPig.x + closestPig.getWidth() && b.x + b.getWidth() > closestPig.x && b.y > closestPig.y)
-									{
-										if (b.y < minY)
-										{
-											minY = b.y;
-											target = b;
-											targetIsBar = true;
-										}
-									}
-								}
+								target = SelectStone(stones);
+								if (target != null)
+									targetIsStone = true;
 							}
-						}	
-					}
-					else if (shotNumber == 0 && stones.size() > 1)
-					{
-						//get closest stone
-						float minX = 9999999f;
-						for (ABObject obj : stones)
-						{
-							if (obj.x < minX)
-							{
-								minX = obj.x;
-								target = obj;
-							}
-						}
-						
-						if (target == null)
-							target = stones.get(0);
-						targetIsStone = true;
+							break;
 					}
 					
 					if (target == null)
-						//random pick a pig if nothing selected
+						// random pick a pig if nothing selected
 						target = pigs.get(randomGenerator.nextInt(pigs.size()));
 						
 					if (targetIsStone)
 						System.out.println("Target is Stone");
 					else if (targetIsBar)
 						System.out.println("Target is Bar");
+					else if (targetIsWall)
+						System.out.println("Target is Wall");
 					else
 						System.out.println("Target is Pig");
 					
@@ -351,17 +310,17 @@ public class NaiveAgent implements Runnable {
 						{
 
 						case RedBird:
-							tapInterval = 0; break;               // start of trajectory
+							tapInterval = 0; break; // start of trajectory
 						case YellowBird:
-							tapInterval = 65 + randomGenerator.nextInt(25);break; // 65-90% of the way
+							tapInterval = 70 + randomGenerator.nextInt(10); break; // 70-80% of the way
 						case WhiteBird:
-							tapInterval =  70 + randomGenerator.nextInt(20);break; // 70-90% of the way
+							tapInterval = 70 + randomGenerator.nextInt(20); break; // 70-90% of the way
 						case BlackBird:
-							tapInterval =  70 + randomGenerator.nextInt(20);break; // 70-90% of the way
+							tapInterval = 70 + randomGenerator.nextInt(20); break; // 70-90% of the way
 						case BlueBird:
-							tapInterval =  80 + randomGenerator.nextInt(10);break; // 80-90% of the way
+							tapInterval = 80 + randomGenerator.nextInt(10); break; // 80-90% of the way
 						default:
-							tapInterval =  60;
+							tapInterval = 60;
 						}
 
 						int tapTime = tp.getTapTime(sling, releasePoint, _tpt, tapInterval);
@@ -413,6 +372,124 @@ public class NaiveAgent implements Runnable {
 
 		}
 		return state;
+	}
+	
+	private static ABObject SelectStone(List<ABObject> stones)
+	{
+		ABObject target = null;
+		
+		//get closest stone
+		float minX = 9999999f;
+		for (ABObject obj : stones)
+		{
+			if (obj.x < minX)
+			{
+				minX = obj.x;
+				target = obj;
+			}
+		}
+		
+		if (target == null)
+			target = stones.get(0);
+		
+		return target;
+	}
+	
+	private static ABObject SelectBar(List<ABObject> pigs, List<ABObject> bars)
+	{
+		// pick the closest pig
+		ABObject target = null;
+		ABObject closestPig = null;
+		float minX = 9999999;
+		float maxY = 0;
+		for (ABObject p : pigs)
+		{
+			if (p.x < minX - p.getWidth() * 2 ||
+			   (p.x < minX + p.getWidth() * 2 && p.y > maxY))
+			{
+				minX = p.x;
+				maxY = p.y;
+				closestPig = p;
+			}
+		}
+		
+		boolean targetFound = false;
+		if (closestPig != null)
+		{
+			maxY = 0;
+			for (ABObject b : bars)
+			{
+				// if bar below pig
+				if (b.x < closestPig.x + closestPig.getWidth() && b.x + b.getWidth() > closestPig.x && b.y < closestPig.y)
+				{
+					if (b.y > maxY)
+					{
+						maxY = b.y;
+						target = b;
+						targetFound = true;
+					}
+				}
+			}
+			
+			//if no bar is found search for bar below pig
+			if (!targetFound)
+			{
+				// pick a bar above the pig
+				float minY = 9999999;
+				for (ABObject b : bars)
+				{
+					// if bar above pig
+					if (b.x < closestPig.x + closestPig.getWidth() && b.x + b.getWidth() > closestPig.x && b.y > closestPig.y)
+					{
+						if (b.y < minY)
+						{
+							minY = b.y;
+							target = b;
+						}
+					}
+				}
+			}
+		}
+		
+		return target;
+	}
+	
+	private static ABObject SelectWall(List<ABObject> pigs, List<ABObject> walls)
+	{
+		// pick the closest pig
+		ABObject target = null;
+		ABObject closestPig = null;
+		float minX = 9999999;
+		float minY = 9999999;
+		for (ABObject p : pigs)
+		{
+			if (p.x < minX - p.getWidth() * 2 ||
+			   (p.x < minX + p.getWidth() * 2 && p.y < minY))
+			{
+				minX = p.x;
+				minY = p.y;
+				closestPig = p;
+			}
+		}
+		
+		if (closestPig != null)
+		{
+			float maxX = 0;
+			for (ABObject w : walls)
+			{
+				// if wall left from pig
+				if (w.y < closestPig.y + closestPig.getHeight() && w.y + w.getHeight() > closestPig.y && w.x < closestPig.x)
+				{
+					if (w.x > maxX)
+					{
+						maxX = w.x;
+						target = w;
+					}
+				}
+			}
+		}
+		
+		return target;
 	}
 
 	public static void main(String args[]) {

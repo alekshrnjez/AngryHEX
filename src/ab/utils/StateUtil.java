@@ -83,12 +83,26 @@ public class StateUtil {
 			
 				e.printStackTrace();
 			}
-		   if(getGameState(proxy) == GameState.WON)
+			
+			byte[] imageBytes = proxy.send(new ProxyScreenshotMessage());
+			BufferedImage image = null;
+			try {
+				   image = ImageIO.read(new ByteArrayInputStream(imageBytes));
+				} 
+			catch (IOException e) {
+				   e.printStackTrace();
+				}
+			
+			GameStateExtractor gameStateExtractor = new GameStateExtractor();
+			GameState state = gameStateExtractor.getGameState(image);
+			
+		   if(state == GameState.WON ||
+			  state == GameState.PLAYING)
 		   {	
 			   current_score = _getScore(proxy);
 		   }
 		   else
-			   System.out.println(" Unexpected state: PLAYING");
+			   System.out.println(" Unexpected state");
 		}
 		return current_score;
 	}

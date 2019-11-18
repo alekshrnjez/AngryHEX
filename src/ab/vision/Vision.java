@@ -60,6 +60,21 @@ public class Vision {
 		return bars;
 	}
 	
+	public List<ABObject> findWalls()
+	{
+		List<ABObject> blocks = findBlocksMBR();
+		ArrayList<ABObject> walls = new ArrayList();
+		
+		for (ABObject b : blocks)
+		{
+			double ratio = b.getHeight() / b.getWidth();
+			if (ratio > 1.9)
+				walls.add(b);
+		}
+		
+		return walls;
+	}
+	
 	public List<ABObject> findTNTs()
 	{
 		if(visionMBR == null)
