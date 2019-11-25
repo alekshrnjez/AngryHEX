@@ -22,6 +22,7 @@ import ab.demo.other.Shot;
 import ab.planner.TrajectoryPlanner;
 import ab.utils.StateUtil;
 import ab.vision.ABObject;
+import ab.vision.ABType;
 import ab.vision.GameStateExtractor.GameState;
 import ab.vision.Vision;
 
@@ -33,6 +34,7 @@ public class NaiveAgent implements Runnable {
 	public static int time_limit = 12;
 	private Map<Integer,Integer> scores = new LinkedHashMap<Integer,Integer>();
 	TrajectoryPlanner tp;
+	private ABType currentBird;
 	private int score;
 	private int previousScore;
 	private int shotNumber;
@@ -186,7 +188,8 @@ public class NaiveAgent implements Runnable {
 					ABObject target = null;
 					
 					// target selection based on bird type
-					switch (aRobot.getBirdTypeOnSling()) 
+					currentBird = aRobot.getBirdTypeOnSling();
+					switch (currentBird) 
 					{
 						case YellowBird:
 							if (walls.size() > 0) // pick a wall
@@ -197,6 +200,13 @@ public class NaiveAgent implements Runnable {
 							}
 							break;
 						case WhiteBird:
+							if (bars.size() > 0) // pick a horizontal bar
+							{
+								target = SelectBar(pigs, bars);
+								if (target != null)
+									targetIsBar = true;
+							}
+							break;
 						case BlackBird:
 						case RedBird:
 						case BlueBird:
@@ -222,8 +232,8 @@ public class NaiveAgent implements Runnable {
 							break;
 					}
 					
+					// random pick a pig if nothing selected
 					if (target == null)
-						// random pick a pig if nothing selected
 						target = pigs.get(randomGenerator.nextInt(pigs.size()));
 						
 					if (targetIsStone)
@@ -236,7 +246,9 @@ public class NaiveAgent implements Runnable {
 						System.out.println("Target is Pig");
 					
 					Point _tpt;
-					if (targetIsBar)
+					if (currentBird == ABType.WhiteBird)
+						_tpt = new Point(target.x - 20, target.y - 500);
+					else if (targetIsBar)
 						_tpt = new Point(target.x, target.y + (int)(target.getHeight() / 2));
 					else
 						_tpt = target.getCenter();// if the target is very close to before, randomly choose a
@@ -314,7 +326,7 @@ public class NaiveAgent implements Runnable {
 						case YellowBird:
 							tapInterval = 70 + randomGenerator.nextInt(10); break; // 70-80% of the way
 						case WhiteBird:
-							tapInterval = 70 + randomGenerator.nextInt(20); break; // 70-90% of the way
+							tapInterval = 95 + randomGenerator.nextInt(5); break; // 95-100% of the way
 						case BlackBird:
 							tapInterval = 70 + randomGenerator.nextInt(20); break; // 70-90% of the way
 						case BlueBird:
